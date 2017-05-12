@@ -98,7 +98,8 @@ def get_obj_data(obj, name):
     integer = '([\-\+\\d*]*)'
     getcolor = '(c\\s+)'+integer+'\\s'+integer+'\\s'+integer
     # TAIL
-
+    DEFAULT_COLOR = ([255,0,0])
+    clr = DEFAULT_COLOR
     for line in infile:
         if line[0]=='#':                    #we have a comment line
             m = re.search(getname, line)        #check to see if this line contains a name
@@ -135,12 +136,13 @@ def get_obj_data(obj, name):
                         line = None
                 if len(vtxlist) > 2:            #we need at least 3 vertices to make an edge
                     obj.fce.append(vtxlist)
+                    obj.clr.append(clr)
+                    #clr = DEFAULT_COLOR
         # HEAD
         elif line[0] == 'c':
              m = re.search(getcolor, line)
              if m:
-                for i in range(6):
-                    obj.clr.append( [int(m.group(2)), int(m.group(3)), int(m.group(4)) ] )
+                clr = ( [int(m.group(2)), int(m.group(3)), int(m.group(4)) ] )
         # TAIL
 
     if obj.name == '':#no name was found, use filename, without extension (.obj)
@@ -554,6 +556,7 @@ class Poly_3D(inkex.Effect):
 
                 z_list.sort(lambda x, y: cmp(x[0],y[0])) #sort by ascending sort parameter of the face
                 draw_faces_edited( z_list, transformed_pts, obj, so.shade, st, poly)
+                #draw_faces( z_list, transformed_pts, obj, so.shade, fill_col, st, poly)
 
             else:#we cannot generate a list of faces from the edges without a lot of computation
                 inkex.errormsg(_('Face Data Not Found. Ensure file contains face data, and check the file is imported as "Face-Specified" under the "Model File" tab.\n'))
