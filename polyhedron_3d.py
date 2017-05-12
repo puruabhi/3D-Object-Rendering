@@ -94,7 +94,11 @@ def get_obj_data(obj, name):
     getedgeline = '(l\\s+)(.*)'
     getfaceline = '(f\\s+)(.*)'
     getnextint = '(\\d+)([/\\d]*)(.*)'#we need to deal with 123\343\123 or 123\\456 as equivalent to 123 (we are ignoring the other options in the obj file)
-    
+    # HEAD
+    integer = '([\-\+\\d*]*)'
+    getcolor = '(c\\s+)'+integer+'\\s'+integer+'\\s'+integer
+    # TAIL
+
     for line in infile:
         if line[0]=='#':                    #we have a comment line
             m = re.search(getname, line)        #check to see if this line contains a name
@@ -131,7 +135,14 @@ def get_obj_data(obj, name):
                         line = None
                 if len(vtxlist) > 2:            #we need at least 3 vertices to make an edge
                     obj.fce.append(vtxlist)
-    
+        # HEAD
+        elif line[0] == 'c':
+             m = re.search(getcolor, line)
+             if m:
+                for i in range(6):
+                    obj.clr.append( [int(m.group(2)), int(m.group(3)), int(m.group(4)) ] )
+        # TAIL
+
     if obj.name == '':#no name was found, use filename, without extension (.obj)
         obj.name = name[0:-4]
 
@@ -173,6 +184,20 @@ def draw_edges( edge_list, pts, st, parent ):
         pt_2 = pts[ edge[1]-1 ][0:2] #the point at the end
         name = 'Edge'+str(edge[0])+'-'+str(edge[1])
         draw_SVG_line(pt_1,pt_2,st, name, parent)#plot edges
+
+# HEAD
+def draw_faces_edited( faces_data, pts, obj, shading, st, parent):          
+    for face in faces_data:#for every polygon that has been sorted
+        fill_col1 = face[4]
+        fill_col = (fill_col1[0],fill_col1[1],fill_col1[2])
+        if shading:
+            st.fill = get_darkened_colour(fill_col, face[1]/pi)#darken proportionally to angle to lighting vector
+        else:
+            st.fill = get_darkened_colour(fill_col, 1)#do not darken colour
+                          
+        face_no = face[3]#the number of the face to draw
+        draw_SVG_poly(pts, obj.fce[ face_no ], st, 'Face:'+str(face_no), parent)
+# TAIL
                               
 def draw_faces( faces_data, pts, obj, shading, fill_col,st, parent):          
     for face in faces_data:#for every polygon that has been sorted
@@ -327,6 +352,9 @@ class Obj(object): #a 3d object defined by the vertices and the faces (eg a poly
         self.edg = []
         self.fce = []
         self.name=''
+        # HEAD
+        self.clr = []
+        # TAIL
         
     def set_type(self, options):
         if options.type == 'face':
@@ -461,7 +489,11 @@ class Poly_3D(inkex.Effect):
         
         scale = self.unittouu('1px')    # convert to document units
         st = Style(so) #initialise style
-        fill_col = (so.f_r, so.f_g, so.f_b) #colour tuple for the face fill
+        fill_col = (so.f_r, so.f_g, so.f_b)
+        # HEAD
+        if len(obj.clr)>0:
+            fill_col = obj.clr #colour tuple for the face fill
+        # TAIL
         lighting = normalise( (so.lv_x,-so.lv_y,so.lv_z) ) #unit light vector
         
         #INKSCAPE GROUP TO CONTAIN THE POLYHEDRON
@@ -508,15 +540,20 @@ class Poly_3D(inkex.Effect):
                 
                 for i in range(len(obj.fce)):
                     face = obj.fce[i] #the face we are dealing with
+                    # HEAD
+                    color = fill_col[i]
+                    # TAIL
                     norm = get_unit_normal(transformed_pts, face, so.cw_wound) #get the normal vector to the face
                     angle = get_angle( norm, lighting )#get the angle between the normal and the lighting vector
                     z_sort_param = get_z_sort_param(transformed_pts, face, so.z_sort)
                     
+                    # HEAD
                     if so.back or norm[2] > 0: # include all polygons or just the front-facing ones as needed
-                        z_list.append((z_sort_param, angle, norm, i))#record the maximum z-value of the face and angle to light, along with the face ID and normal
-                
+                        z_list.append((z_sort_param, angle, norm, i, color))#record the maximum z-value of the face and angle to light, along with the face ID and normal
+                    # TAIL
+
                 z_list.sort(lambda x, y: cmp(x[0],y[0])) #sort by ascending sort parameter of the face
-                draw_faces( z_list, transformed_pts, obj, so.shade, fill_col, st, poly)
+                draw_faces_edited( z_list, transformed_pts, obj, so.shade, st, poly)
 
             else:#we cannot generate a list of faces from the edges without a lot of computation
                 inkex.errormsg(_('Face Data Not Found. Ensure file contains face data, and check the file is imported as "Face-Specified" under the "Model File" tab.\n'))
