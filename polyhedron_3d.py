@@ -97,9 +97,13 @@ def get_obj_data(obj, name):
     # HEAD
     integer = '([\-\+\\d*]*)'
     getcolor = '(c\\s+)'+integer+'\\s'+integer+'\\s'+integer
-    # TAIL
+    gettransparency = '(t\\s+)'+integer+'\\s'+integer
     DEFAULT_COLOR = ([255,0,0])
+    DEFAULT_TRANSPARENCY = ([0.5,0.5])
     clr = DEFAULT_COLOR
+    tpr = DEFAULT_TRANSPARENCY
+    # TAIL
+    count = 0
     for line in infile:
         if line[0]=='#':                    #we have a comment line
             m = re.search(getname, line)        #check to see if this line contains a name
@@ -136,13 +140,25 @@ def get_obj_data(obj, name):
                         line = None
                 if len(vtxlist) > 2:            #we need at least 3 vertices to make an edge
                     obj.fce.append(vtxlist)
+                    # HEAD
                     obj.clr.append(clr)
-                    #clr = DEFAULT_COLOR
+                    obj.tpr.append(tpr)
+
+                    count = (count+1)%6
+                    if(not count):
+                        clr = DEFAULT_COLOR
+                        tpr = DEFAULT_TRANSPARENCY
+                    # TAIL
         # HEAD
         elif line[0] == 'c':
              m = re.search(getcolor, line)
              if m:
                 clr = ( [int(m.group(2)), int(m.group(3)), int(m.group(4)) ] )
+
+        elif line[0] == 't':
+             m = re.search(gettransparency, line)
+             if m:
+                tpr = ( [int(m.group(2)), int(m.group(3)) ] )
         # TAIL
 
     if obj.name == '':#no name was found, use filename, without extension (.obj)
@@ -192,6 +208,9 @@ def draw_faces_edited( faces_data, pts, obj, shading, st, parent):
     for face in faces_data:#for every polygon that has been sorted
         fill_col1 = face[4]
         fill_col = (fill_col1[0],fill_col1[1],fill_col1[2])
+        tpr = face[5]
+        st.f_opac = str(1 - (tpr[0]/100.0))
+        st.s_opac = str(1 - (tpr[1]/100.0))
         if shading:
             st.fill = get_darkened_colour(fill_col, face[1]/pi)#darken proportionally to angle to lighting vector
         else:
@@ -356,6 +375,7 @@ class Obj(object): #a 3d object defined by the vertices and the faces (eg a poly
         self.name=''
         # HEAD
         self.clr = []
+        self.tpr = []
         # TAIL
         
     def set_type(self, options):
@@ -544,6 +564,7 @@ class Poly_3D(inkex.Effect):
                     face = obj.fce[i] #the face we are dealing with
                     # HEAD
                     color = fill_col[i]
+                    transparency = obj.tpr[i]
                     # TAIL
                     norm = get_unit_normal(transformed_pts, face, so.cw_wound) #get the normal vector to the face
                     angle = get_angle( norm, lighting )#get the angle between the normal and the lighting vector
@@ -551,7 +572,7 @@ class Poly_3D(inkex.Effect):
                     
                     # HEAD
                     if so.back or norm[2] > 0: # include all polygons or just the front-facing ones as needed
-                        z_list.append((z_sort_param, angle, norm, i, color))#record the maximum z-value of the face and angle to light, along with the face ID and normal
+                        z_list.append((z_sort_param, angle, norm, i, color, transparency))#record the maximum z-value of the face and angle to light, along with the face ID and normal
                     # TAIL
 
                 z_list.sort(lambda x, y: cmp(x[0],y[0])) #sort by ascending sort parameter of the face
