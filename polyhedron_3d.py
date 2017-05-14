@@ -144,10 +144,10 @@ def get_obj_data(obj, name):
                     obj.clr.append(clr)
                     obj.tpr.append(tpr)
 
-                    count = (count+1)%6
-                    if(not count):
-                        clr = DEFAULT_COLOR
-                        tpr = DEFAULT_TRANSPARENCY
+                    # count = (count+1)%6
+                    # if(not count):
+                    #     clr = DEFAULT_COLOR
+                    #     tpr = DEFAULT_TRANSPARENCY
                     # TAIL
         # HEAD
         elif line[0] == 'c':
