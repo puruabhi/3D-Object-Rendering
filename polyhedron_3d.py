@@ -296,11 +296,29 @@ def rot_x( matrix , a):#rotate around the x-axis by a radians
                             [   0    ,  sin(a) , cos(a) ]]))
     return trans_mat*matrix
 
-def get_transformed_pts( vtx_list, trans_mat):#translate the points according to the matrix
+def get_transformed_pts_parallel( vtx_list, trans_mat):#translate the points according to the matrix
     transformed_pts = []
     for vtx in vtx_list:
         transformed_pts.append((trans_mat * mat(vtx).T).T.tolist()[0] )#transform the points at add to the list
     return transformed_pts
+
+# HEAD
+def get_transformed_pts_perspective( vtx_list, trans_mat, obs):#translate the points according to the matrix
+    transformed_pts = []
+    for vtx in vtx_list:
+        vertex = (trans_mat * mat(vtx).T).T.tolist()[0]
+        #filea.write(str(vertex)+'\n')
+        z = vertex[2]
+        #filea.write(str(z)+'\n')
+        factor = obs/(obs-z)
+        #filea.write(str(factor)+'\n')
+        vertex[0] = vertex[0]*factor
+        vertex[1] = vertex[1]*factor
+        #filea.write(str(vertex)+'\n')
+        transformed_pts.append( vertex )#transform the points at add to the list
+        #filea.write(str(x)+'\n')
+    return transformed_pts
+#TAIL
 
 def get_max_z(pts, face): #returns the largest z_value of any point in the face
     max_z = pts[ face[0]-1 ][2]
@@ -331,6 +349,10 @@ def get_z_sort_param(pts, face, method): #returns the z-sorting parameter specif
     else:
         z_sort_param  = get_cent_z(pts, face)
     return z_sort_param
+
+# def get_view_plane(vtx_list, obs):
+#     if obs<0:
+
 
 #OBJ DATA MANIPULATION
 def remove_duplicates(list):#removes the duplicates from a list
@@ -376,6 +398,7 @@ class Obj(object): #a 3d object defined by the vertices and the faces (eg a poly
         # HEAD
         self.clr = []
         self.tpr = []
+        self.obs = 3000
         # TAIL
         
     def set_type(self, options):
@@ -414,6 +437,9 @@ class Poly_3D(inkex.Effect):
         self.OptionParser.add_option("--type",
             action="store", type="string", 
             dest="type", default='face')
+        self.OptionParser.add_option("--prj",
+            action="store", type="string",
+            dest="prj", default="parallel")
 #VEIW SETTINGS
         self.OptionParser.add_option("--r1_ax",
             action="store", type="string", 
@@ -451,6 +477,12 @@ class Poly_3D(inkex.Effect):
         self.OptionParser.add_option("--r6_ang",
             action="store", type="float", 
             dest="r6_ang", default=0)
+        self.OptionParser.add_option("--projection",
+            action="store", type="string", 
+            dest="projection", default="Parallel")
+        self.OptionParser.add_option("--observer",
+            action="store", type="int", 
+            dest="observer", default=100)
         self.OptionParser.add_option("--scl",
             action="store", type="float", 
             dest="scl", default=100.0)
@@ -501,8 +533,9 @@ class Poly_3D(inkex.Effect):
             
     def effect(self):
         so = self.options#shorthand
-        
         #INITIALISE AND LOAD DATA
+        #filea = open('/home/abhisheikh/Documents/abc.txt','w')
+        #filea.write("hello\n")
         
         obj = Obj() #create the object
         file = get_filename(so)#get the file to load data from
@@ -539,8 +572,15 @@ class Poly_3D(inkex.Effect):
             trans_mat = rotate(trans_mat, angle, axis)
         trans_mat = trans_mat*so.scl #scale by linear factor (do this only after the transforms to reduce round-off)
         
-        transformed_pts = get_transformed_pts(obj.vtx, trans_mat) #the points as projected in the z-axis onto the viewplane
-        
+        #transformed_pts = get_transformed_pts_parallel(obj.vtx, trans_mat) #the points as projected in the z-axis onto the viewplane
+        # HEAD
+        if so.projection == 'prll':
+            transformed_pts = get_transformed_pts_parallel(obj.vtx, trans_mat) #the points as projected in the z-axis onto the viewplane
+        else:
+            obj.obs = float(so.observer)
+            transformed_pts = get_transformed_pts_perspective(obj.vtx, trans_mat, obj.obs) #the points as projected in the z-axis onto the viewplane
+        #filea.write(str(transformed_pts)+'\n\n')
+        # TAIL
         #RENDERING OF THE OBJECT
         
         if so.show == 'vtx':
@@ -576,6 +616,7 @@ class Poly_3D(inkex.Effect):
                     # TAIL
 
                 z_list.sort(lambda x, y: cmp(x[0],y[0])) #sort by ascending sort parameter of the face
+                #filea.write(str(z_list))
                 draw_faces_edited( z_list, transformed_pts, obj, so.shade, st, poly)
                 #draw_faces( z_list, transformed_pts, obj, so.shade, fill_col, st, poly)
 
