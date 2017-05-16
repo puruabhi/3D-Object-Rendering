@@ -2,6 +2,13 @@
 
 Development of an Inkscape Extension (using Python) or a standalone system for personalized 2D vector form rendition (to .svg files) of a 3D voxelized object (from .obj files) using color/material file information, transformation, different choices of projection, lighting, transparency etc.
 
+## Installation
+Make sure you have Inkscape installed in your system.
+```
+sudo apt install inkscape
+```
+Then copy `polyhedron_3d.py` and `polyhedron_3d.inx` to folder `/usr/share/inkscape/extensions/`.
+
 ## Face Color
 
 Color of faces can be specified in a line with starting letter "c" followed by the values of r, g and b before defining faces. 
