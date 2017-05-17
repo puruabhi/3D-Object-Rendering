@@ -617,8 +617,12 @@ class Poly_3D(inkex.Effect):
 
                 z_list.sort(lambda x, y: cmp(x[0],y[0])) #sort by ascending sort parameter of the face
                 #filea.write(str(z_list))
+                # HEAD
+                if obj.obs < 0:
+                    z_list.reverse()
                 draw_faces_edited( z_list, transformed_pts, obj, so.shade, st, poly)
                 #draw_faces( z_list, transformed_pts, obj, so.shade, fill_col, st, poly)
+                # TAIL
 
             else:#we cannot generate a list of faces from the edges without a lot of computation
                 inkex.errormsg(_('Face Data Not Found. Ensure file contains face data, and check the file is imported as "Face-Specified" under the "Model File" tab.\n'))
