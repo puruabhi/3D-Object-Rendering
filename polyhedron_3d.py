@@ -204,7 +204,7 @@ def draw_edges( edge_list, pts, st, parent ):
         draw_SVG_line(pt_1,pt_2,st, name, parent)#plot edges
 
 # HEAD
-def draw_faces_edited( faces_data, pts, obj, shading, st, parent):          
+def draw_faces_edited( faces_data, pts, transformed_face_list, shading, st, parent):          
     for face in faces_data:#for every polygon that has been sorted
         fill_col1 = face[4]
         fill_col = (fill_col1[0],fill_col1[1],fill_col1[2])
@@ -215,9 +215,11 @@ def draw_faces_edited( faces_data, pts, obj, shading, st, parent):
             st.fill = get_darkened_colour(fill_col, face[1]/pi)#darken proportionally to angle to lighting vector
         else:
             st.fill = get_darkened_colour(fill_col, 1)#do not darken colour
-                          
-        face_no = face[3]#the number of the face to draw
-        draw_SVG_poly(pts, obj.fce[ face_no ], st, 'Face:'+str(face_no), parent)
+
+        face_no = face[3]
+        face_to_draw = transformed_face_list[face_no]#the number of the face to draw
+        if face_to_draw:
+        	draw_SVG_poly(pts, face_to_draw, st, 'Face:'+str(face_no), parent)
 # TAIL
                               
 def draw_faces( faces_data, pts, obj, shading, fill_col,st, parent):          
@@ -257,8 +259,9 @@ def normalise(vector):#return the unit vector pointing in the same direction as 
 
 def get_normal( pts, face): #returns the normal vector for the plane passing though the first three elements of face of pts
     #n = pt[0]->pt[1] x pt[0]->pt[3]
-    a = (array(pts[ face[0]-1 ]) - array(pts[ face[1]-1 ]))
-    b = (array(pts[ face[0]-1 ]) - array(pts[ face[2]-1 ]))
+    v1, v2, v3 = three_diff_vertices(pts, face)
+    a = (array(v1) - array(v2))
+    b = (array(v1) - array(v3))
     return cross(a,b).flatten()
 
 def get_unit_normal(pts, face, cw_wound): #returns the unit normal for the plane passing through the first three points of face, taking account of winding
@@ -303,14 +306,16 @@ def get_transformed_pts_parallel( vtx_list, trans_mat):#translate the points acc
     return transformed_pts
 
 # HEAD
-def get_transformed_pts_perspective( vtx_list, trans_mat, obs):#translate the points according to the matrix
+def get_transformed_pts_perspective( vtx_list, obs):#translate the points according to the matrix
     transformed_pts = []
     for vtx in vtx_list:
-        vertex = (trans_mat * mat(vtx).T).T.tolist()[0]
+        vertex = vtx
         #filea.write(str(vertex)+'\n')
         z = vertex[2]
         #filea.write(str(z)+'\n')
-        factor = obs/(obs-z)
+        if z == obs:
+            z = z + 0.1
+        factor = 500/(obs-z)
         #filea.write(str(factor)+'\n')
         vertex[0] = vertex[0]*factor
         vertex[1] = vertex[1]*factor
@@ -318,6 +323,64 @@ def get_transformed_pts_perspective( vtx_list, trans_mat, obs):#translate the po
         transformed_pts.append( vertex )#transform the points at add to the list
         #filea.write(str(x)+'\n')
     return transformed_pts
+
+def clip_faces(faces, pts, obs):
+	screen = obs - 400
+	transformed_faces = []
+	for face in faces:
+		#filea.write('face: '+str(face)+'\n')
+		clipped_face = []
+		for i in range(len(face)):
+			#filea.write('Inside face: '+str(face)+', i: '+ str(i)+', ')
+			v1 = pts[face[i]-1]
+			v2 = pts[face[(i+1)%len(face)]-1]
+			if (v1[2]>screen) and (v2[2]<= screen):
+				factor = (screen-v1[2])/(v2[2]-v1[2])
+				x = v1[0]+(factor*(v2[0]-v1[0]))
+				y = v1[1]+(factor*(v2[1]-v1[1]))
+				z = screen
+				v3 = ([x,y,z])
+				pts.append(v3)
+				clipped_face.append(len(pts))
+			elif (v1[2]<=screen) and (v2[2]>screen):
+				factor = (screen-v1[2])/(v2[2]-v1[2])
+				x = v1[0]+(factor*(v2[0]-v1[0]))
+				y = v1[1]+(factor*(v2[1]-v1[1]))
+				z = screen
+				v3 = ([x,y,z])
+				pts.append(v3)
+				clipped_face.append(face[i])
+				clipped_face.append(len(pts))
+			elif (v1[2]<=screen) and (v2[2]<=screen):
+				clipped_face.append(face[i])
+			#filea.write('clipped_face: '+str(clipped_face)+'\n')
+		transformed_faces.append(clipped_face)
+		#filea.write('transformed_face: '+str(clipped_face)+'\n\n')
+		#filea.write(str(len(pts)))
+	#filea.write('\n')
+	return transformed_faces
+
+def three_diff_vertices(pts, face):
+    v1 = pts[face[0]-1]
+    index = 0
+    while (index<len(face)):
+        v2 = pts[face[index]-1]
+        if v1 == v2:
+            index = index+1
+        else:
+            break
+    if v1 == v2:
+        return False
+    index = index+1
+    while (index<len(face)):
+        v3 = pts[face[index]-1]
+        if (v1 == v3) or (v2 == v3):
+            index = index+1
+        else:
+            break
+    if (v1 == v3) or (v2 == v3):
+        return False
+    return v1, v2, v3
 #TAIL
 
 def get_max_z(pts, face): #returns the largest z_value of any point in the face
@@ -349,10 +412,6 @@ def get_z_sort_param(pts, face, method): #returns the z-sorting parameter specif
     else:
         z_sort_param  = get_cent_z(pts, face)
     return z_sort_param
-
-# def get_view_plane(vtx_list, obs):
-#     if obs<0:
-
 
 #OBJ DATA MANIPULATION
 def remove_duplicates(list):#removes the duplicates from a list
@@ -574,11 +633,14 @@ class Poly_3D(inkex.Effect):
         
         #transformed_pts = get_transformed_pts_parallel(obj.vtx, trans_mat) #the points as projected in the z-axis onto the viewplane
         # HEAD
-        if so.projection == 'prll':
-            transformed_pts = get_transformed_pts_parallel(obj.vtx, trans_mat) #the points as projected in the z-axis onto the viewplane
-        else:
+        transformed_pts = get_transformed_pts_parallel(obj.vtx, trans_mat) #the points as projected in the z-axis onto the viewplane
+        transformed_faces = obj.fce
+        #filea.write('transformed_pts_prll: '+str(transformed_pts)+'\n\n'+str(transformed_faces)+'\n\n')
+        if so.projection == 'prsp':
             obj.obs = float(so.observer)
-            transformed_pts = get_transformed_pts_perspective(obj.vtx, trans_mat, obj.obs) #the points as projected in the z-axis onto the viewplane
+            transformed_faces = clip_faces(obj.fce, transformed_pts, obj.obs)
+            transformed_pts = get_transformed_pts_perspective(transformed_pts, obj.obs) #the points as projected in the z-axis onto the viewplane
+            #filea.write(str(transformed_pts)+'\n\n'+str(transformed_faces))
         #filea.write(str(transformed_pts)+'\n\n')
         # TAIL
         #RENDERING OF THE OBJECT
@@ -600,27 +662,28 @@ class Poly_3D(inkex.Effect):
                
                 z_list = []
                 
-                for i in range(len(obj.fce)):
-                    face = obj.fce[i] #the face we are dealing with
+                for i in range(len(transformed_faces)):
+                    face = transformed_faces[i] #the face we are dealing with
+                    # filea.write('face '+str(i)+': '+str(face)+'\n')
+                    # for ver in face:
+                    #     filea.write('pts '+str(face.index(ver))+': '+str(transformed_pts[ver-1])+'\n')
                     # HEAD
-                    color = fill_col[i]
-                    transparency = obj.tpr[i]
-                    # TAIL
-                    norm = get_unit_normal(transformed_pts, face, so.cw_wound) #get the normal vector to the face
-                    angle = get_angle( norm, lighting )#get the angle between the normal and the lighting vector
-                    z_sort_param = get_z_sort_param(transformed_pts, face, so.z_sort)
-                    
-                    # HEAD
-                    if so.back or norm[2] > 0: # include all polygons or just the front-facing ones as needed
-                        z_list.append((z_sort_param, angle, norm, i, color, transparency))#record the maximum z-value of the face and angle to light, along with the face ID and normal
+                    if face:
+                        if not three_diff_vertices(transformed_pts, face):
+                            continue
+                        color = fill_col[i]
+                        transparency = obj.tpr[i]
+                        norm = get_unit_normal(transformed_pts, face, so.cw_wound) #get the normal vector to the face
+                        angle = get_angle( norm, lighting ) #get the angle between the normal and the lighting vector
+                        z_sort_param = get_z_sort_param(transformed_pts, face, so.z_sort)
+                        if so.back or norm[2] > 0: # include all polygons or just the front-facing ones as needed
+	                        z_list.append((z_sort_param, angle, norm, i, color, transparency))#record the maximum z-value of the face and angle to light, along with the face ID and normal
                     # TAIL
 
                 z_list.sort(lambda x, y: cmp(x[0],y[0])) #sort by ascending sort parameter of the face
                 #filea.write(str(z_list))
                 # HEAD
-                if obj.obs < 0:
-                    z_list.reverse()
-                draw_faces_edited( z_list, transformed_pts, obj, so.shade, st, poly)
+                draw_faces_edited( z_list, transformed_pts, transformed_faces, so.shade, st, poly)
                 #draw_faces( z_list, transformed_pts, obj, so.shade, fill_col, st, poly)
                 # TAIL
 
