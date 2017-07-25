@@ -120,7 +120,8 @@ def get_obj_data(obj, name, fill):
                 elif tokens[0] == 'f':          #we have a face (maybe)
                     vtxlist = []
                     for i in range(1, len(tokens)):
-                        vtxlist.append(int(tokens[i]))
+                        face_vertex = tokens[i].split('/')
+                        vtxlist.append(int(face_vertex[0]))
 
                     if len(vtxlist) > 2:        #we need at least 3 vertices to make an edge
                         obj.fce.append(vtxlist)
@@ -292,7 +293,9 @@ def length(vector):#return the pythagorean length of a vector
     return sqrt(dot(vector,vector))
 
 def normalise(vector):#return the unit vector pointing in the same direction as the argument
-    return vector / length(vector)
+    if length(vector)>0:
+        return vector / length(vector)
+    return vector
 
 def get_normal( pts, face): #returns the normal vector for the plane passing though the first three elements of face of pts
     #n = pt[0]->pt[1] x pt[0]->pt[3]
